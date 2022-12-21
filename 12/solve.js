@@ -1,16 +1,16 @@
-const { match } = require('assert');
-const { dir } = require('console');
 const fs = require('fs');
 const readline = require('readline');
 
 
-let route = [];
+let availableSteps = [];
 let grid = [];
 
-// { x, y, score, paths: [] }
+let start = { };
+let end = { };
+
 async function solveForInput() {
 
-    const fileStream = fs.createReadStream('input-s.txt');
+    const fileStream = fs.createReadStream('input.txt');
 
     const rl = readline.createInterface({
         input: fileStream,
@@ -18,8 +18,7 @@ async function solveForInput() {
     });
 
     let y = 0;
-    let start = { };
-    let end = { };
+
     for await (const line of rl) {
         let cells = line.split('');
         let row = [];
@@ -40,58 +39,85 @@ async function solveForInput() {
         y++;
     }
 
+    // availableSteps.push({
+    //     x: start.x,
+    //     y: start.y,
+    //     score: 0
+    // });
+
+    console.log(grid);
     for (let y = 0; y < grid.length; y++) {
-        console.log(grid[y]);
+        for (let x = 0; x < grid[y].length; x++) {
+            console.log(`${x} ${y} ${grid[y][x]}`);
+            if (grid[y][x] == 1) {
+                availableSteps.push({
+                    x,
+                    y,
+                    score: 0
+                });
+            }
+        }
     }
 
-    route.push({
-        x: start.x,
-        y: start.y,
-        score: 0
-    });
+   // console.log(availableSteps);
+    let nextStep = getCheapest(availableSteps, SCORE_ALG);
 
-    //for (let i = 0; i < 30; i++) {
-        let current = route[route.length - 1];
-        let options = getValidSteps(current);
-
-        console.log(getCheapest(options));
-
+    while(true) {  
         
+        // Get all the valid steps from this node and add them to the list.
+        let options = getValidSteps(nextStep);
 
-    //}
+        updateAvailableSteps(options);
+
+        // Check which steps this opens up.
+        nextStep = getCheapest(availableSteps, SCORE_ALG);
+        console.log(`Available Steps: ${availableSteps.length}`);
+        console.log(nextStep);
+
+        if(nextStep.x == end.x && nextStep.y == end.y) {
+            console.log("Found!");
+            break;
+        }
+    }
+
+    let s = nextStep
+    console.log("Path");
+    do {
+        console.log(`${s.x},${s.y}: ${s.score}`);
+        s = s.prev;
+    } while(s.prev != null);
    
 }
 
 function getValidSteps(step) {
-    if (step.paths) {
-        step.paths;
-    }
-
+    console.log(step);
+    let newNodes = [];
     let x = step.x;
     let y = step.y;
     let height = grid[y][x];
 
-    step.paths = [];
     for (let y2 = y-1; y2 <= y+1; y2++) {
         if (y2 >= 0 && y2 < grid.length && y2 != y) {
-                if (grid[y2][x] <= height + 1){
-                    if (!doesPathContain(step, x, y2)) {
-                        step.paths.push({
-                            prev: step,
-                            x: x,
-                            y: y2,
-                            score: step.score + 1
-                        });
-                    }
+            if (grid[y2][x] <= height + 1){
+                if (!doesPathContain(step, x, y2)) {
+                    newNodes.push({
+                        distanceFromEnd: distanceFromEnd(x, y2),
+                        prev: step,
+                        x: x,
+                        y: y2,
+                        score: step.score + 1
+                    });
                 }
             }
+        }
     }
 
     for (let x2 = x-1; x2 <= x+1; x2++) {
         if (x2 >= 0 && x2 < grid[y].length && x2 != x) {
             if (grid[y][x2] <= height + 1){
                 if (!doesPathContain(step, x2, y)) {
-                    step.paths.push({
+                    newNodes.push({
+                        distanceFromEnd: distanceFromEnd(x2, y),
                         prev: step,
                         x: x2,
                         y: y,
@@ -102,7 +128,33 @@ function getValidSteps(step) {
         }
     }
 
-    return step.paths;
+    return newNodes;
+}
+
+function updateAvailableSteps(options) {
+    for (let i = 0; i < options.length; i++) {
+        let option = options[i];
+        for (let j = 0; j < availableSteps.length; j++) {
+            if (availableSteps[j].x == option.x && availableSteps[j].y == options[i].y) {
+                if (availableSteps[j].score > options[i].score) {
+                    availableSteps[j] = options[i];
+                }
+                option = null;
+                break;
+            }
+        }
+        
+        if (option != null) {
+            availableSteps.push(option);
+        }
+    }
+}
+
+function distanceFromEnd(x,y) {
+    let diffX = Math.abs(x - end.x);
+    let diffY = Math.abs(y - end.y);
+
+    return diffX + diffY;
 }
 
 function doesPathContain(head, x, y) {
@@ -118,20 +170,17 @@ function doesPathContain(head, x, y) {
     return false;
 }
 
-function getCheapest(possibleSteps) {
-    let cheapest = null;
-    for (let i = 0; i < possibleSteps.length; i++) {
-        let possibleStep = possibleSteps[i];
-        if (possibleStep.score != null) {
-            if (cheapest == null) {
-                cheapest = possibleStep;
-            } else if (cheapest.score > possibleStep.score) {
-                cheapest = possibleStep;
-            }
-        }
-    }
+let SCORE_ALG = 0;
+let DIST_ALG = 1;
 
-    return cheapest;
+function getCheapest(possibleSteps, alg) {
+    if (alg == SCORE_ALG) {
+        possibleSteps.sort((a,b) => a.score-b.score);
+    } else {
+        possibleSteps.sort((a,b) => a.distanceFromEnd - b.distanceFromEnd);
+    }
+    
+    return possibleSteps.shift();
 }
 
 async function solve() {
@@ -139,5 +188,3 @@ async function solve() {
 }
 
 solve();
-
-// // too high
